@@ -111,15 +111,6 @@
   #tip b{color:#ffd9c7}
   #tip .r{display:flex;justify-content:space-between;gap:14px}
   #tip .r span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
-  /* contexto gobernación */
-  .ctx{border:1px dashed #c9d3d0;border-radius:12px;padding:14px 16px;background:#fafcfb;margin-bottom:16px;min-width:0}
-  .ctx h3{margin:0 0 6px;font-size:14px}
-  .ctx .item{border-top:1px solid var(--line);padding:9px 0;display:grid;grid-template-columns:1fr auto;gap:4px 14px;font-size:12.5px}
-  .ctx .item:first-of-type{border-top:0}
-  .ctx .ent{font-weight:600;color:var(--strong)}
-  .ctx .obj{color:var(--muted);grid-column:1/-1;font-size:12px}
-  .ctx .v{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
-  .nosuma{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:10px;padding:1px 7px;margin-left:6px}
   /* tablas */
   .tblwrap{overflow-x:auto;max-width:100%}
   table{width:100%;border-collapse:collapse;font-size:11.5px}
@@ -279,17 +270,10 @@
       </div>
     </div>
 
-    <div class="chartgrid">
-      <div class="card">
-        <h3>Procesos publicados desde el sismo que aún no tienen contrato</h3>
-        <p class="expl">Trámites en SECOP II sin contrato asociado en los datos. Pueden convertirse en contratos en los próximos días.</p>
-        <div id="s-proc"></div>
-      </div>
-      <div class="ctx">
-        <h3>¿Y la contratación del sismo? Está en otras dependencias <span class="nosuma">no suma aquí</span></h3>
-        <p class="expl muted" style="font-size:12.5px;margin:0 0 6px">Contratos de la Gobernación del Valle (mismo NIT, cualquier dependencia) firmados desde el 10-ago-2026 cuyo objeto nombra el sismo, la calamidad o la urgencia manifiesta.</p>
-        <div id="s-gob"></div>
-      </div>
+    <div class="card">
+      <h3>Procesos publicados desde el sismo que aún no tienen contrato</h3>
+      <p class="expl">Trámites en SECOP II sin contrato asociado en los datos. Pueden convertirse en contratos en los próximos días.</p>
+      <div id="s-proc"></div>
     </div>
   </section>
 
@@ -537,7 +521,7 @@ function relacionSismo(c){
    La misma función procesa los datos locales (datos.js) y los que
    llegan en vivo desde la API: deduplica, cruza y enriquece.
    ============================================================ */
-const D = window.DATOS || {contratos:[],procesos:[],enriq:{},soloJbjy:[],gobSismo:[],meta:{}};
+const D = window.DATOS || {contratos:[],procesos:[],enriq:{},soloJbjy:[],meta:{}};
 const META = D.meta || {};
 const EXCLUIR_ESTADO = /^(borrador|cancelado)$/i;
 const RANGO_ESTADO = {'cerrado':7,'terminado':6,'suspendido':5,'modificado':4,'en ejecucion':3,'activo':2,'aprobado':1};
@@ -623,13 +607,10 @@ function construir(crudosC, crudosP){
   return {contratos:out, procesos, sinContrato};
 }
 
-let RAW=[], PROC=[], SIN_CONTRATO=[], GOB=[], ANO_MIN=0, ANO_MAX=0, CORTE='';
-function setData(crudosC, crudosP, gob){
+let RAW=[], PROC=[], SIN_CONTRATO=[], ANO_MIN=0, ANO_MAX=0, CORTE='';
+function setData(crudosC, crudosP){
   const r = construir(crudosC, crudosP);
   RAW = r.contratos; PROC = r.procesos; SIN_CONTRATO = r.sinContrato;
-  const vistos={};
-  GOB = (gob||[]).map(x=>Object.assign(mapContrato(x,'integrado'),{entidad:S(x.entidad||x.nombre_de_la_entidad)}))
-    .filter(g=>{ if(vistos[g.id]){ vistos[g.id].valor=Math.max(vistos[g.id].valor,g.valor); return false; } vistos[g.id]=g; return true; });
   const anos = [...new Set(RAW.map(c=>c.ano))].sort(); ANO_MIN=anos[0]||0; ANO_MAX=anos[anos.length-1]||0;
   state.ymin=ANO_MIN; state.ymax=ANO_MAX;
   CORTE = RAW.map(c=>c.firma).sort().pop() || SISMO;
@@ -745,12 +726,10 @@ function renderSismo(){
   $('s-n-nota').textContent = `${(post.length/dias*7).toFixed(1).replace('.',',')} por semana`;
   $('s-v-nota').textContent = top ? `el mayor: ${compactCOP(top.valor)}` : '';
 
-  const gobV = GOB.reduce((s,g)=>s+g.valor,0);
   let lead = `Desde el sismo la Secretaría firmó <b>${plural(post.length,'contrato','contratos')}</b> por <b>${compactCOP(vPost)}</b>. `;
   lead += nEv===0 ? 'Ninguno menciona el sismo en su objeto' : `${plural(nEv,'menciona','mencionan')} el sismo en su objeto`;
   lead += (umC+umP)===0 ? ' y ninguno se tramitó por urgencia manifiesta. ' : ` y ${fmtN(umC+umP)} se tramitaron por urgencia manifiesta. `;
   if(post.length) lead += `El ${Math.round(ops.length/post.length*100)}% son prestaciones de servicios con personas naturales. `;
-  if(GOB.length) lead += `Lo que la Gobernación sí contrató por el sismo (${compactCOP(gobV)}) pasó por otras dependencias.`;
   $('s-lead').innerHTML = lead;
 
   const ventana = (desde, n) => { const a=iso(dia(desde)), b=iso(dia(desde)+(n-1)*864e5); const F=RAW.filter(c=>c.firma>=a&&c.firma<=b); return {a,b,n:F.length,v:F.reduce((s,c)=>s+c.valor,0)}; };
@@ -780,7 +759,6 @@ function renderSismo(){
   renderSemanas();
   renderSismoTabla(post);
   renderSinContrato();
-  renderGob();
 }
 
 function renderSemanas(){
@@ -836,17 +814,6 @@ function renderSinContrato(){
     L.map(p=>`<tr><td class="dt">${p.pub}</td><td class="obj" style="min-width:200px">${esc(p.objeto)}<div class="doc">${esc(p.ref)} · ${esc(p.justif)}</div></td><td class="num">${fmtCOP(p.precio)}</td><td class="tip">${esc(p.estado)}<div>${btnSecop(p.url)}</div></td></tr>`).join('')+`</tbody></table></div>`
     : '<div class="vacio">Todos los procesos publicados desde el sismo ya tienen contrato en los datos.</div>';
 }
-function renderGob(){
-  const L = [...GOB].sort((a,b)=>b.valor-a.valor);
-  const tot = L.reduce((s,g)=>s+g.valor,0);
-  const nombre = e => e.replace(/^(GOBERNACI[OÓ]N DEL VALLE DEL CAUCA|VALLE DEL CAUCA|DEPARTAMENTO DEL VALLE DEL CAUCA)\s*-\s*/i,'');
-  $('s-gob').innerHTML = L.length ? L.map(g=>`<div class="item">
-      <div class="ent">${esc(nombre(g.entidad))}<div class="doc">${g.firma} · ${esc(g.modalidad)} · ${esc(g.prov)}</div></div>
-      <div class="v">${compactCOP(g.valor)}</div>
-      <div class="obj">${esc(g.objeto)}<div style="margin-top:5px">${btnSecop(g.url)}</div></div></div>`).join('') + `<div class="item"><div class="ent">Total en otras dependencias</div><div class="v">${fmtCOP(tot)}</div></div>`
-    : '<div class="vacio">No hay contratos de la Gobernación que nombren el sismo en los datos.</div>';
-}
-
 /* ============================================================
    7. TODO EL PERIODO
    ============================================================ */
@@ -1084,15 +1051,14 @@ async function actualizarDesdeAPI(){
   try{
     const ctrl=new AbortController(), t=setTimeout(()=>ctrl.abort(),40000);
     const get=u=>fetch(u,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
-    const [c,p,g]=await Promise.all([
+    const [c,p]=await Promise.all([
       get(api('rpmr-utcd',`nombre_de_la_entidad='${ENT}' AND fecha_de_firma_del_contrato >= '2024-01-01T00:00:00'`,'fecha_de_firma_del_contrato DESC, numero_del_contrato')),
       get(api('p6dx-8zbt',`entidad='${ENT}' AND fecha_de_publicacion_del >= '2023-10-01T00:00:00'`,'fecha_de_publicacion_del DESC, id_del_proceso')),
-      META.w_gob ? get(api('rpmr-utcd',META.w_gob,'fecha_de_firma_del_contrato DESC')) : Promise.resolve(D.gobSismo),
     ]);
     clearTimeout(t);
     if(!Array.isArray(c) || c.length < D.contratos.length*0.95) throw new Error(`respuesta incompleta (${Array.isArray(c)?c.length:0} filas frente a ${D.contratos.length} locales)`);
     const yr=[state.ymin,state.ymax], completo=yr[0]===ANO_MIN&&yr[1]===ANO_MAX;
-    setData(c,p,g);
+    setData(c,p);
     if(!completo){ state.ymin=Math.max(yr[0],ANO_MIN); state.ymax=Math.min(yr[1],ANO_MAX); }
     refreshControls(); renderSismo(); render();
     st.textContent='● datos en línea · '+new Date().toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'}); st.className='online';
@@ -1106,7 +1072,7 @@ async function actualizarDesdeAPI(){
 /* ============================================================
    9. INICIO
    ============================================================ */
-setData(D.contratos, D.procesos, D.gobSismo);
+setData(D.contratos, D.procesos);
 initControls(); renderColsPanel(); refreshControls(); renderSismo(); render();
 console.log('[dashboard] OK · contratos:',RAW.length,'· valor total:',fmtCOP(RAW.reduce((s,c)=>s+c.valor,0)));
 actualizarDesdeAPI();

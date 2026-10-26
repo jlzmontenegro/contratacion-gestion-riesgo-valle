@@ -13,8 +13,8 @@ Tablero interactivo de la contratación de la Secretaría de Gestión del Riesgo
 
 ## Datos
 
-- **Contratos:** SECOP Integrado (`rpmr-utcd`) en datos.gov.co, filtrado por el nombre exacto de la entidad. El dataset de contratos de SECOP II (`jbjy-vk9h`) está truncado a 1.000 filas desde septiembre de 2026.
-- **Procesos:** SECOP II (`p6dx-8zbt`), para la justificación de la modalidad y el código UNSPSC.
+- **Contratos:** SECOP II · Contratos Electrónicos (`jbjy-vk9h`) en datos.gov.co, filtrado por el nombre exacto de la entidad. Al 26-oct-2026 son 707 contratos firmados desde 2024; se verificaron uno a uno contra SECOP Integrado (`rpmr-utcd`).
+- **Procesos:** SECOP II (`p6dx-8zbt`), para la referencia del proceso y los procesos que aún no tienen contrato.
 - Se excluyen los contratos en Borrador o Cancelado y se deja una sola fila por contrato.
 - La página consulta la API al abrirse y se actualiza sola; si no hay conexión usa `datos.js`.
 

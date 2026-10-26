@@ -217,7 +217,7 @@
       <span>NIT: <b id="m-nit"></b></span>
       <span>Contratos: <b id="m-n"></b></span>
       <span>Firmados entre: <b id="m-per"></b></span>
-      <span>Fuentes: <b><a href="https://www.datos.gov.co/resource/rpmr-utcd.json" target="_blank" rel="noopener">SECOP Integrado (rpmr-utcd)</a></b> + <b><a href="https://www.datos.gov.co/resource/p6dx-8zbt.json" target="_blank" rel="noopener">SECOP II Procesos (p6dx-8zbt)</a></b></span>
+      <span>Fuentes: <b><a href="https://www.datos.gov.co/Gastos-Gubernamentales/SECOP-II-Contratos-Electr-nicos/jbjy-vk9h" target="_blank" rel="noopener">SECOP II Contratos Electrónicos (jbjy-vk9h)</a></b> + <b><a href="https://www.datos.gov.co/resource/p6dx-8zbt.json" target="_blank" rel="noopener">SECOP II Procesos (p6dx-8zbt)</a></b></span>
       <span class="muted">Datos base: <span id="m-dl"></span></span>
       <span id="m-status" class="muted"></span>
     </div>
@@ -401,10 +401,10 @@
   <div class="card meth">
     <h3>Cómo se armó este tablero</h3>
     <ul>
-      <li><b>Fuente de contratos: SECOP Integrado (<code>rpmr-utcd</code>).</b> El dataset habitual de contratos de SECOP II (<code>jbjy-vk9h</code>) está truncado a 1.000 filas para todo el país desde septiembre de 2026, así que no sirve para esta consulta. Se filtra por el nombre exacto de la entidad, no por el NIT, que comparten todas las dependencias de la Gobernación.</li>
-      <li><b>Cruce con procesos (<code>p6dx-8zbt</code>)</b> por el identificador del aviso (<code>CO1.NTC</code>) de la URL: aporta la justificación de la modalidad (p. ej. «Urgencia manifiesta») y el código UNSPSC.</li>
-      <li><b>Descarga de julio de 2026</b> (<code>jbjy-vk9h</code> completa hasta el 8-jul-2026): aporta supervisor, PYME y las fuentes de financiación de los contratos de ese corte, y <span id="meth-solo"></span> contratos que no aparecen en SECOP Integrado (etiqueta <span class="mini fu">solo jul-2026</span>).</li>
-      <li><b>Sin duplicados:</b> SECOP Integrado repite el mismo contrato en varias filas (una por estado). Se deja una fila por contrato (<code>id</code> único) con su estado más avanzado y el <b>valor mayor</b>, que es el valor tras adiciones (coincide con SECOP II en los 70 casos comparables). <b>Se excluyen</b> los contratos en Borrador y Cancelado.</li>
+      <li><b>Fuente de contratos: SECOP II · Contratos Electrónicos (<code>jbjy-vk9h</code>)</b>, el dataset oficial de contratos de SECOP II. Se filtra por el nombre exacto de la entidad, no por el NIT, que comparten todas las dependencias de la Gobernación. Trae estado, justificación, supervisor, ordenador del gasto y fuentes de financiación de cada contrato.</li>
+      <li><b>Cruce con procesos (<code>p6dx-8zbt</code>)</b> por el portafolio (<code>CO1.BDOS</code>) o el aviso (<code>CO1.NTC</code>): aporta la referencia del proceso y permite ver los procesos que aún no tienen contrato.</li>
+      <li><b>Sin duplicados:</b> una fila por contrato (<code>id_contrato</code> único). <b>Se excluyen</b> los contratos en Borrador y Cancelado. El valor es el valor actual del contrato, con adiciones incluidas; SECOP II no publica el valor inicial.</li>
+      <li><b>Verificación (26-oct-2026):</b> los 707 contratos coinciden uno a uno, y con el mismo valor, con SECOP Integrado (<code>rpmr-utcd</code>). Ese dataset tenía además un registro de $18 M que no existe en contratos electrónicos y quedó por fuera.</li>
       <li><b>Estado actual:</b> se muestra el que reporta SECOP. «Aprobado (firmado)» es el contrato firmado por ambas partes. Muchas entidades no actualizan el estado en SECOP cuando el contrato avanza o termina; por eso la tarjeta de estados indica cuántos contratos siguen abiertos con el plazo ya vencido.</li>
       <li><b>Categorías:</b> la función <code>categorizar()</code> lee el objeto sin acentos y la primera regla que coincide gana. Los contratos de compras y servicios se clasifican por lo que compran; los de prestación de servicios con persona natural (OPS), por el perfil contratado. No se usan palabras del nombre de la entidad.</li>
       <li><b>Las cifras del sismo son un piso:</b> la urgencia manifiesta permite contratar antes de publicar en SECOP.</li>
@@ -521,11 +521,10 @@ function relacionSismo(c){
    La misma función procesa los datos locales (datos.js) y los que
    llegan en vivo desde la API: deduplica, cruza y enriquece.
    ============================================================ */
-const D = window.DATOS || {contratos:[],procesos:[],enriq:{},soloJbjy:[],meta:{}};
+const D = window.DATOS || {contratos:[],procesos:[],meta:{}};
 const META = D.meta || {};
 const EXCLUIR_ESTADO = /^(borrador|cancelado)$/i;
-const RANGO_ESTADO = {'cerrado':7,'terminado':6,'suspendido':5,'modificado':4,'en ejecucion':3,'activo':2,'aprobado':1};
-const NOMBRE_ESTADO = {'aprobado':'Aprobado (firmado)','activo':'Activo','en ejecucion':'En ejecución','modificado':'Modificado','suspendido':'Suspendido','terminado':'Terminado','cerrado':'Cerrado'};
+const NOMBRE_ESTADO = {'aprobado':'Aprobado (firmado)','activo':'Activo','en ejecucion':'En ejecución','modificado':'Modificado','suspendido':'Suspendido','terminado':'Terminado','cerrado':'Cerrado','cedido':'Cedido','enviado proveedor':'Enviado al proveedor'};
 const FUENTES = [
   ['Presupuesto General de la Nación','presupuesto_general_de_la_nacion_pgn'],
   ['Sistema General de Participaciones','sistema_general_de_participaciones'],
@@ -537,21 +536,28 @@ const FUENTES = [
 const N = v => { const x = parseFloat(v); return isNaN(x)?0:x; };
 const S = v => v==null ? '' : String(v).trim();
 const ntc = u => ((S(u).match(/CO1\.NTC\.\d+/)||[])[0]||'');
+const sinDef = v => /^(no definido|sin descripcion|unspecified)$/i.test(norm(v)) ? '' : S(v);
 
-function mapContrato(r, fuente){
-  return {
-    id:S(r.numero_del_contrato), ref:S(r.numero_de_proceso), estado:S(r.estado_del_proceso),
-    modalidad:S(r.modalidad_de_contrataci_n), tipo:S(r.tipo_de_contrato), objeto:S(r.objeto_a_contratar),
-    prov:S(r.nom_raz_social_contratista).replace(/\s+/g,' '), doc:S(r.documento_proveedor), tdoc:S(r.tipo_documento_proveedor),
-    valor:N(r.valor_contrato), firma:S(r.fecha_de_firma_del_contrato).slice(0,10),
-    inicio:S(r.fecha_inicio_ejecuci_n).slice(0,10), fin:S(r.fecha_fin_ejecuci_n).slice(0,10),
-    url:S(r.url_contrato), fuente
+// Un registro de SECOP II · Contratos Electrónicos (jbjy-vk9h) al esquema del tablero
+function mapContrato(r){
+  const c = {
+    id:S(r.id_contrato), ref:S(r.referencia_del_contrato), estado:S(r.estado_contrato),
+    modalidad:S(r.modalidad_de_contratacion), justif:sinDef(r.justificacion_modalidad_de), tipo:S(r.tipo_de_contrato),
+    objeto:S(r.objeto_del_contrato), prov:S(r.proveedor_adjudicado).replace(/\s+/g,' '),
+    doc:S(r.documento_proveedor), tdoc:sinDef(r.tipodocproveedor), pyme:/^si/i.test(S(r.es_pyme))?1:0,
+    valor:N(r.valor_del_contrato), firma:S(r.fecha_de_firma).slice(0,10),
+    inicio:S(r.fecha_de_inicio_del_contrato).slice(0,10), fin:S(r.fecha_de_fin_del_contrato).slice(0,10),
+    duracion:S(r.duraci_n_del_contrato), diasAd:N(r.dias_adicionados), unspsc:sinDef(r.codigo_de_categoria_principal),
+    superv:sinDef(r.nombre_supervisor), ordenador:sinDef(r.nombre_ordenador_del_gasto),
+    bdos:S(r.proceso_de_compra), url:S(r.urlproceso&&r.urlproceso.url)
   };
+  FUENTES.forEach(([,k],i)=>{ c['f'+i] = N(r[k]); });
+  return c;
 }
 function mapProceso(r){
   return {
-    idp:S(r.id_del_proceso), ref:S(r.referencia_del_proceso), justif:S(r.justificaci_n_modalidad_de),
-    unspsc:S(r.codigo_principal_de_categoria), precio:N(r.precio_base), estado:S(r.estado_resumen),
+    idp:S(r.id_del_proceso), port:S(r.id_del_portafolio), ref:S(r.referencia_del_proceso), justif:S(r.justificaci_n_modalidad_de),
+    unspsc:sinDef(r.codigo_principal_de_categoria), precio:N(r.precio_base), estado:S(r.estado_resumen),
     pub:S(r.fecha_de_publicacion_del).slice(0,10), objeto:S(r.descripci_n_del_procedimiento),
     modalidad:S(r.modalidad_de_contratacion), adj:S(r.adjudicado),
     url:S(r.urlproceso&&r.urlproceso.url), ntc:ntc(r.urlproceso&&r.urlproceso.url)
@@ -560,34 +566,24 @@ function mapProceso(r){
 let CALIDAD = {filas:0, repetidas:0, excluidos:0, duplicados:0};
 function construir(crudosC, crudosP){
   const procesos = crudosP.map(mapProceso);
-  const porNtc = {}; procesos.forEach(p=>{ if(p.ntc) porNtc[p.ntc]=p; });
+  const porNtc = {}, porPort = {};
+  procesos.forEach(p=>{ if(p.ntc) porNtc[p.ntc]=p; if(p.port) porPort[p.port]=p; });
+  // una fila por contrato (jbjy no debería repetir, pero se comprueba)
   const m = {}; let filasRep = 0;
-  crudosC.map(r=>mapContrato(r,'integrado')).forEach(c=>{
-    const o = m[c.id];
-    if(!o){ c.valorMin=c.valor; m[c.id]=c; return; }
-    filasRep++;
-    const rk = e => RANGO_ESTADO[norm(e)]||0;
-    if(rk(c.estado) > rk(o.estado)) o.estado = c.estado;
-    o.valorMin = Math.min(o.valorMin, c.valor);
-    o.valor = Math.max(o.valor, c.valor);
-    if(c.fin > o.fin) o.fin = c.fin;
-    if(!o.inicio) o.inicio = c.inicio;
+  crudosC.map(mapContrato).forEach(c=>{
+    if(!m[c.id]){ m[c.id]=c; return; }
+    filasRep++; if(c.valor > m[c.id].valor) m[c.id]=c;
   });
-  (D.soloJbjy||[]).forEach(r=>{ const c=mapContrato(r,'jbjy'); if(!m[c.id]){ c.valorMin=c.valor; m[c.id]=c; } });
   const out = []; let excl = 0;
   Object.values(m).forEach(c=>{
     if(!c.firma || c.firma < '2024-01-01') return;
     if(EXCLUIR_ESTADO.test(c.estado)){ excl++; return; }
-    const p = porNtc[ntc(c.url)], e = (D.enriq||{})[c.id] || {};
+    const p = porPort[c.bdos] || porNtc[ntc(c.url)];
     c.estado = NOMBRE_ESTADO[norm(c.estado)] || c.estado;
     c.refp = p ? p.ref : '';
-    c.justif = S(e.justificacion_modalidad_de) || (p ? p.justif : '');
-    c.unspsc = S(e.codigo_de_categoria_principal) || (p && p.unspsc!=='UNSPECIFIED' ? p.unspsc : '');
-    c.superv = S(e.nombre_supervisor);
-    c.pyme = /^si/i.test(S(e.es_pyme)) ? 1 : 0;
-    c.conFin = FUENTES.some(([,k])=>e[k]!=null);
-    FUENTES.forEach(([,k],i)=>{ c['f'+i] = N(e[k]); });
-    c.adicion = c.valor - c.valorMin;
+    if(!c.justif && p) c.justif = p.justif;
+    if(!c.unspsc && p) c.unspsc = p.unspsc;
+    c.conFin = FUENTES.some((_,i)=>c['f'+i]>0);
     c.ano = +c.firma.slice(0,4);
     c.provKey = norm(c.prov).trim() || '(sin nombre)';
     c.cat = categorizar(c);
@@ -599,11 +595,10 @@ function construir(crudosC, crudosP){
   const graf = {};
   out.forEach(c=>{ const g=(graf[c.provKey]=graf[c.provKey]||{}); g[c.prov]=(g[c.prov]||0)+1; });
   out.forEach(c=>{ const g=graf[c.provKey]; c.provN = Object.keys(g).sort((a,b)=>g[b]-g[a])[0] || '(sin nombre)'; });
-  const ids = new Set(out.map(c=>c.id));
-  CALIDAD = {filas:crudosC.length, repetidas:filasRep, excluidos:excl, duplicados:out.length-ids.size};
-  const ntcConContrato = new Set(Object.values(m).map(c=>ntc(c.url)));
-  const sinContrato = procesos.filter(p=>p.ntc && !ntcConContrato.has(p.ntc));
-  console.log(`[datos] ${crudosC.length} filas → ${out.length} contratos (${filasRep} filas repetidas fusionadas, ${excl} cancelados/borrador excluidos, ${CALIDAD.duplicados} ids duplicados) · ${procesos.length} procesos`);
+  CALIDAD = {filas:crudosC.length, repetidas:filasRep, excluidos:excl, duplicados:out.length-new Set(out.map(c=>c.id)).size};
+  const conContrato = new Set(Object.values(m).flatMap(c=>[c.bdos, ntc(c.url)]).filter(Boolean));
+  const sinContrato = procesos.filter(p=>p.ntc && !conContrato.has(p.ntc) && !conContrato.has(p.port));
+  console.log(`[datos] ${crudosC.length} registros → ${out.length} contratos (${filasRep} repetidos, ${excl} cancelados/borrador excluidos, ${CALIDAD.duplicados} duplicados) · ${procesos.length} procesos`);
   return {contratos:out, procesos, sinContrato};
 }
 
@@ -852,22 +847,21 @@ function renderKPIs(F, tot){
 function renderFuente(F){
   const conF = F.filter(c=>c.conFin);
   const rows = FUENTES.map(([nm],i)=>({k:nm, lab:nm, v:conF.reduce((s,c)=>s+c['f'+i],0), n:conF.filter(c=>c['f'+i]>0).length})).filter(r=>r.v>0);
-  $('fuente-cob').textContent = `— dato disponible para ${fmtN(conF.length)} de ${fmtN(F.length)} contratos (los del corte de julio de 2026)`;
+  $('fuente-cob').textContent = conF.length===F.length ? '— según lo que reporta SECOP II en cada contrato' : `— reportado en ${fmtN(conF.length)} de ${fmtN(F.length)} contratos`;
   barChart($('chart-fuente'), rows, {});
 }
 function renderMeth(){
   const rows = group(RAW,c=>c.cat).sort((a,b)=>b.v-a.v), total = rows.reduce((s,r)=>s+r.v,0);
   $('meth-tbl').innerHTML = '<thead><tr><th>Categoría</th><th class="num">Contratos</th><th class="num">Valor</th><th class="num">%</th></tr></thead><tbody>'+
     rows.map(r=>`<tr><td>${esc(r.k)}</td><td class="num">${fmtN(r.n)}</td><td class="num">${fmtCOP(r.v)}</td><td class="num">${fmtPct(r.v/total*100)}</td></tr>`).join('')+'</tbody>';
-  $('meth-solo').textContent = fmtN(RAW.filter(c=>c.fuente==='jbjy').length);
-  $('dup-nota').textContent = `Calidad: ${fmtN(CALIDAD.repetidas)} filas repetidas fusionadas · ${fmtN(CALIDAD.excluidos)} cancelados/borrador excluidos · ${fmtN(CALIDAD.duplicados)} duplicados`;
+  $('dup-nota').textContent = `Calidad: ${fmtN(CALIDAD.filas)} registros en SECOP II · ${fmtN(CALIDAD.excluidos)} cancelados/borrador excluidos · ${fmtN(CALIDAD.duplicados)} duplicados`;
 }
 
 /* --- tabla con columnas dinámicas --- */
 const estadoColor = e => ({'En ejecución':'background:#dbeafe;color:#1e3a8a','Modificado':'background:#fdf1d6;color:#7a4b00','Suspendido':'background:#fde2e1;color:#8b1e1e','Terminado':'background:#e7ebea;color:#4b5755','Cerrado':'background:#e7ebea;color:#4b5755'})[e] || 'background:#e3efed;color:#0E5C58';
 const COLS = [
-  {k:'provN',   t:'Contratista', def:1, cls:'prv', html:c=>`${esc(c.provN)}<div class="doc">${esc(c.tdoc?c.tdoc+' ':'')}${esc(c.doc)}${c.pyme?'<span class="mini">PYME</span>':''}${c.fuente==='jbjy'?'<span class="mini fu">solo jul-2026</span>':''}</div>`},
-  {k:'valor',   t:'Valor', def:1, num:1, html:c=>`${fmtCOP(c.valor)}${c.adicion>0?`<div class="doc">incluye ${compactCOP(c.adicion)} en adiciones</div>`:''}`},
+  {k:'provN',   t:'Contratista', def:1, cls:'prv', html:c=>`${esc(c.provN)}<div class="doc">${esc(c.tdoc?c.tdoc+' ':'')}${esc(c.doc)}${c.pyme?'<span class="mini">PYME</span>':''}</div>`},
+  {k:'valor',   t:'Valor', def:1, num:1, html:c=>fmtCOP(c.valor)},
   {k:'objeto',  t:'Objeto', def:1, cls:'obj', html:c=>esc(c.objeto)||'—'},
   {k:'tipo',    t:'Tipo de contrato', def:1, cls:'tip'},
   {k:'firma',   t:'Fecha de firma', def:1, cls:'dt'},
@@ -879,12 +873,14 @@ const COLS = [
   {k:'modalidad',t:'Modalidad', cls:'tip'},
   {k:'justif',  t:'Justificación', cls:'tip'},
   {k:'rel',     t:'Relación con el sismo', html:c=>c.post?`<span class="rel ${REL[c.rel].cls}">${REL[c.rel].t}</span>`:'<span class="muted">antes del sismo</span>'},
-  {k:'adicion', t:'Adiciones', num:1, html:c=>c.adicion>0?fmtCOP(c.adicion):'—'},
+  {k:'duracion',t:'Duración', cls:'dt'},
+  {k:'diasAd',  t:'Días adicionados', num:1, html:c=>c.diasAd>0?fmtN(c.diasAd):'—'},
   {k:'superv',  t:'Supervisor', cls:'tip'},
+  {k:'ordenador',t:'Ordenador del gasto', cls:'tip'},
   {k:'id',      t:'ID contrato', cls:'ref'},
   {k:'url',     t:'SECOP', def:1, fijo:1, nosort:1, html:c=>btnSecop(c.url)},
 ];
-const COLS_KEY = 'sgrd-valle-columnas-v1';
+const COLS_KEY = 'sgrd-valle-columnas-v2';
 let visibles = new Set(COLS.filter(c=>c.def).map(c=>c.k));
 try{ const g=JSON.parse(localStorage.getItem(COLS_KEY)||'null'); if(Array.isArray(g)&&g.length) visibles=new Set(g.filter(k=>COLS.some(c=>c.k===k)).concat(['url'])); }catch(e){}
 const guardarCols = () => { try{ localStorage.setItem(COLS_KEY, JSON.stringify([...visibles])); }catch(e){} };
@@ -1052,7 +1048,7 @@ async function actualizarDesdeAPI(){
     const ctrl=new AbortController(), t=setTimeout(()=>ctrl.abort(),40000);
     const get=u=>fetch(u,{signal:ctrl.signal}).then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
     const [c,p]=await Promise.all([
-      get(api('rpmr-utcd',`nombre_de_la_entidad='${ENT}' AND fecha_de_firma_del_contrato >= '2024-01-01T00:00:00'`,'fecha_de_firma_del_contrato DESC, numero_del_contrato')),
+      get(api('jbjy-vk9h',`nombre_entidad='${ENT}' AND fecha_de_firma >= '2024-01-01T00:00:00'`,'fecha_de_firma DESC, id_contrato')),
       get(api('p6dx-8zbt',`entidad='${ENT}' AND fecha_de_publicacion_del >= '2023-10-01T00:00:00'`,'fecha_de_publicacion_del DESC, id_del_proceso')),
     ]);
     clearTimeout(t);

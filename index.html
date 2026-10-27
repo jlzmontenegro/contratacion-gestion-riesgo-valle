@@ -99,6 +99,26 @@
   .bar-fill{height:100%;border-radius:0 4px 4px 0;min-width:2px;transition:width .25s}
   .bar-val{font-size:12px;color:var(--strong);min-width:170px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .bar-val .sec{color:var(--muted);font-size:11px;margin-left:4px}
+  /* «¿En qué se ha gastado la plata?»: franja de proporción + tarjetas por categoría */
+  .cat-split{display:flex;height:34px;border-radius:8px;overflow:hidden;gap:2px;background:var(--panel);margin-bottom:6px}
+  .cat-split div{display:flex;align-items:center;padding:0 10px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;min-width:4px;cursor:default}
+  .cat-split-ley{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin-bottom:14px}
+  .cat-split-ley i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .cat-split-ley b{color:var(--strong);font-variant-numeric:tabular-nums}
+  .cat-grupo{margin-bottom:14px}
+  .cat-grupo h4{margin:0 0 8px;font-size:12.5px;color:var(--strong);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .cat-grupo h4 i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .cat-grupo h4 span{color:var(--muted);font-weight:400}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+  .tile{display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit;min-width:0}
+  .tile:hover{border-color:var(--c);box-shadow:0 2px 8px rgba(11,20,19,.08)}
+  .tile.sel{background:var(--accent-soft);border-color:var(--accent);border-left-color:var(--c)}
+  .tile.tenue{opacity:.55}
+  .tile .t-nom{font-size:12.5px;font-weight:600;color:var(--strong);line-height:1.3}
+  .tile .t-val{font-size:19px;font-weight:700;color:var(--strong);font-variant-numeric:tabular-nums;margin-top:2px}
+  .tile .t-sec{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .tile .t-bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:5px}
+  .tile .t-bar i{display:block;height:100%;background:var(--c);border-radius:3px;min-width:3px}
   /* variante con el nombre completo encima de la barra (top de contratistas) */
   .bars-top .bar-row{flex-wrap:wrap;gap:3px 10px;margin-bottom:10px;padding:4px 4px 2px}
   .bars-top .bar-lab{width:100%;min-width:0;text-align:left;white-space:normal;overflow:visible;font-weight:600;color:var(--strong);font-size:12.5px}
@@ -188,6 +208,9 @@
     .bar-track{height:14px}
     .bar-val{min-width:0;font-size:11px}
     .cmp-row{grid-template-columns:96px 1fr 84px;gap:6px;font-size:11px}
+    .tiles{grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px}
+    .tile{padding:8px 10px}
+    .tile .t-val{font-size:16px}
     .metricbar .resumen{margin-left:0;width:100%}
     .seg button{padding:6px 9px;font-size:12px}
     table{font-size:10.5px}
@@ -343,7 +366,7 @@
   </div>
 
   <div class="card">
-    <h3>¿En qué se ha gastado la plata? <span class="hint">— por categoría · clic para filtrar</span></h3>
+    <h3>¿En qué se ha gastado la plata? <span class="hint">— por categoría · clic en una tarjeta para filtrar</span></h3>
     <div id="chart-cat"></div>
   </div>
 
@@ -821,7 +844,7 @@ function render(){
   renderKPIs(F, tot); renderChips(); syncControls();
   $('m-resumen').textContent = `Seleccionado: ${plural(F.length,'contrato','contratos')} · ${compactCOP(tot.v)}`;
   const dimChart = (el, d) => barChart($(el), group(F, c=>valDim(c,d), DIMS[d].label), {tot, sel:state.sel[d], onClick:k=>toggle(d,k)});
-  dimChart('chart-cat','cat');
+  renderCat(F, tot);
   // Top 15: siempre los 15 de mayor valor adjudicado; la métrica elegida solo cambia la lectura
   const provs = group(F, c=>c.provKey, c=>c.provN).sort((a,b)=>b.v-a.v).slice(0,15);
   barChart($('chart-prov'), provs, {tot, sel:state.sel.provKey, ordenar:false, onClick:k=>toggle('provKey',k)});
@@ -834,6 +857,45 @@ function render(){
   barChart($('chart-ano'), anos, {tot, ordenar:false, sel:new Set(state.ymin===state.ymax?[String(state.ymin)]:[]),
     onClick:k=>{ const y=+k, solo=state.ymin===y&&state.ymax===y; state.ymin=solo?ANO_MIN:y; state.ymax=solo?ANO_MAX:y; page=1; render(); }});
   renderFuente(F); renderMeth(); renderTable(F);
+}
+/* «¿En qué se ha gastado la plata?»: una franja que reparte el total entre personal (OPS)
+   y compras/obras/servicios, y debajo una tarjeta por categoría con el nombre completo.
+   Responde al control «Medir por / Mostrar» y filtra al hacer clic, igual que las barras. */
+const GRUPOS_CAT = [
+  {k:'compras', t:'Compras, obras y servicios', color:'#2a78d6', es:c=>!c.startsWith('OPS')},
+  {k:'ops',     t:'Personal por prestación de servicios (OPS)', color:'#1baf7a', es:c=>c.startsWith('OPS')},
+];
+function renderCat(F, tot){
+  const el = $('chart-cat'), sel = state.sel.cat, haySel = sel.size>0;
+  if(!F.length){ el.innerHTML='<div class="vacio">Ningún contrato cumple los filtros actuales.</div>'; return; }
+  const filas = group(F, c=>c.cat);
+  const fmtMain = r => fmtMode==='pct' ? fmtPct(tot[metric]?r[metric]/tot[metric]*100:0) : (metric==='v' ? compactCOP(r.v) : fmtN(r.n));
+  const fmtSec = r => metric==='v'
+    ? (fmtMode==='pct' ? compactCOP(r.v)+' · ' : fmtPct(tot.v?r.v/tot.v*100:0)+' · ')+plural(r.n,'contrato','contratos')
+    : (fmtMode==='pct' ? plural(r.n,'contrato','contratos')+' · ' : fmtPct(tot.n?r.n/tot.n*100:0)+' · ')+compactCOP(r.v);
+  const grupos = GRUPOS_CAT.map(g=>{
+    const rows = filas.filter(r=>g.es(r.k)).sort((a,b)=>b[metric]-a[metric] || b.v-a.v);
+    return Object.assign({}, g, {rows, n:rows.reduce((s,r)=>s+r.n,0), v:rows.reduce((s,r)=>s+r.v,0)});
+  }).filter(g=>g.rows.length).sort((a,b)=>b[metric]-a[metric]);
+  const pctG = g => tot[metric] ? g[metric]/tot[metric]*100 : 0;
+  let h = '<div class="cat-split" role="img" aria-label="Reparto entre grupos">'+grupos.map(g=>
+    `<div style="flex:${Math.max(g[metric],tot[metric]*0.01)};background:${g.color}" data-tip="${esc(tipHTML({lab:g.t,n:g.n,v:g.v},tot))}">${pctG(g)>=12?fmtPct(pctG(g)):''}</div>`).join('')+'</div>';
+  h += '<div class="cat-split-ley">'+grupos.map(g=>`<span><i style="background:${g.color}"></i>${g.t}: <b>${fmtPct(pctG(g))}</b> · ${compactCOP(g.v)} · ${plural(g.n,'contrato','contratos')}</span>`).join('')+'</div>';
+  grupos.forEach(g=>{
+    h += `<div class="cat-grupo"><h4><i style="background:${g.color}"></i>${g.t} <span>${fmtN(g.rows.length)} categorías</span></h4><div class="tiles">`;
+    g.rows.forEach(r=>{
+      const on = sel.has(r.k), pct = tot[metric] ? r[metric]/tot[metric]*100 : 0;
+      h += `<button class="tile${on?' sel':''}${haySel&&!on?' tenue':''}" style="--c:${g.color}" data-k="${encodeURIComponent(r.k)}" aria-pressed="${on}" data-tip="${esc(tipHTML({lab:r.k,n:r.n,v:r.v},tot))}">
+        <span class="t-nom">${esc(r.k.replace(/^OPS · /,''))}</span>
+        <span class="t-val">${fmtMain(r)}</span>
+        <span class="t-sec">${fmtSec(r)}</span>
+        <span class="t-bar"><i style="width:${Math.min(100,pct).toFixed(1)}%"></i></span>
+      </button>`;
+    });
+    h += '</div></div>';
+  });
+  el.innerHTML = h;
+  el.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',()=>toggle('cat',decodeURIComponent(t.dataset.k))));
 }
 function renderKPIs(F, tot){
   $('k-n').textContent = fmtN(F.length);

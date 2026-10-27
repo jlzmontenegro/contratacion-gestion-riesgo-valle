@@ -99,6 +99,9 @@
   .bar-fill{height:100%;border-radius:0 4px 4px 0;min-width:2px;transition:width .25s}
   .bar-val{font-size:12px;color:var(--strong);min-width:170px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   .bar-val .sec{color:var(--muted);font-size:11px;margin-left:4px}
+  /* variante con el nombre completo encima de la barra (top de contratistas) */
+  .bars-top .bar-row{flex-wrap:wrap;gap:3px 10px;margin-bottom:10px;padding:4px 4px 2px}
+  .bars-top .bar-lab{width:100%;min-width:0;text-align:left;white-space:normal;overflow:visible;font-weight:600;color:var(--strong);font-size:12.5px}
   .cmp-row{display:grid;grid-template-columns:200px 1fr 120px;gap:10px;align-items:center;margin-bottom:8px;font-size:12.5px}
   .cmp-row .lb{text-align:right;color:var(--txt)}
   .cmp-row .lb small{display:block;color:var(--muted);font-size:11px}
@@ -346,7 +349,7 @@
 
   <div class="card">
     <h3>Top 15 contratistas por valor adjudicado <span class="hint">— el orden es siempre por valor; clic para filtrar por ese contratista</span></h3>
-    <div id="chart-prov"></div>
+    <div id="chart-prov" class="bars-top"></div>
   </div>
 
   <div class="chartgrid">

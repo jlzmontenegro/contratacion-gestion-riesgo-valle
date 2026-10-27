@@ -101,12 +101,19 @@
   .bar-val .sec{color:var(--muted);font-size:11px;margin-left:4px}
   /* «¿En qué se ha gastado la plata?»: franja de proporción + tarjetas por categoría */
   .cat-split{display:flex;height:34px;border-radius:8px;overflow:hidden;gap:2px;background:var(--panel);margin-bottom:6px}
-  .cat-split div{display:flex;align-items:center;padding:0 10px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;min-width:4px;cursor:default}
+  .cat-split button{display:flex;align-items:center;padding:0 10px;color:#fff;font:600 12px/1 inherit;font-family:inherit;white-space:nowrap;overflow:hidden;min-width:4px;border:0;cursor:pointer}
+  .cat-split button:hover{filter:brightness(1.08)}
+  .cat-split button.tenue{opacity:.4}
+  .cat-split button.sel{box-shadow:inset 0 0 0 3px rgba(11,20,19,.55)}
   .cat-split-ley{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin-bottom:14px}
   .cat-split-ley i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
   .cat-split-ley b{color:var(--strong);font-variant-numeric:tabular-nums}
   .cat-grupo{margin-bottom:14px}
-  .cat-grupo h4{margin:0 0 8px;font-size:12.5px;color:var(--strong);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .cat-grupo h4{margin:0 0 8px;font-size:12.5px;color:var(--strong)}
+  .g-btn{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font:inherit;font-weight:700;color:inherit;background:none;border:1px solid transparent;border-radius:8px;padding:4px 8px;margin-left:-8px;cursor:pointer;text-align:left}
+  .g-btn:hover{border-color:var(--line);background:var(--panel2)}
+  .g-btn.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .g-btn .g-acc{color:var(--accent);font-weight:600;font-size:11.5px}
   .cat-grupo h4 i{width:11px;height:11px;border-radius:3px;display:inline-block}
   .cat-grupo h4 span{color:var(--muted);font-weight:400}
   .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
@@ -366,7 +373,7 @@
   </div>
 
   <div class="card">
-    <h3>¿En qué se ha gastado la plata? <span class="hint">— por categoría · clic en una tarjeta para filtrar</span></h3>
+    <h3>¿En qué se ha gastado la plata? <span class="hint">— clic en una tarjeta para filtrar esa categoría, o en la franja o el título del grupo para filtrarlo completo</span></h3>
     <div id="chart-cat"></div>
   </div>
 
@@ -874,6 +881,15 @@ const GRUPOS_CAT = [
   {k:'compras', t:'Compras, obras y servicios', color:'#2a78d6', es:c=>!c.startsWith('OPS')},
   {k:'ops',     t:'Personal por prestación de servicios (OPS)', color:'#1baf7a', es:c=>c.startsWith('OPS')},
 ];
+// categorías de un grupo (en todos los datos, no solo las visibles con los filtros actuales)
+const catsGrupo = gk => { const g = GRUPOS_CAT.find(x=>x.k===gk); return [...new Set(RAW.map(c=>c.cat))].filter(g.es); };
+const grupoCompleto = gk => { const cs = catsGrupo(gk); return cs.length>0 && cs.every(c=>state.sel.cat.has(c)); };
+// clic en la franja o en el título: marca todas las categorías del grupo, o las desmarca si ya lo estaban
+function toggleGrupo(gk){
+  const cs = catsGrupo(gk), todas = grupoCompleto(gk);
+  cs.forEach(c=> todas ? state.sel.cat.delete(c) : state.sel.cat.add(c));
+  page=1; render();
+}
 function renderCat(F, tot){
   const el = $('chart-cat'), sel = state.sel.cat, haySel = sel.size>0;
   if(!F.length){ el.innerHTML='<div class="vacio">Ningún contrato cumple los filtros actuales.</div>'; return; }
@@ -887,11 +903,12 @@ function renderCat(F, tot){
     return Object.assign({}, g, {rows, n:rows.reduce((s,r)=>s+r.n,0), v:rows.reduce((s,r)=>s+r.v,0)});
   }).filter(g=>g.rows.length).sort((a,b)=>b[metric]-a[metric]);
   const pctG = g => tot[metric] ? g[metric]/tot[metric]*100 : 0;
-  let h = '<div class="cat-split" role="img" aria-label="Reparto entre grupos">'+grupos.map(g=>
-    `<div style="flex:${Math.max(g[metric],tot[metric]*0.01)};background:${g.color}" data-tip="${esc(tipHTML({lab:g.t,n:g.n,v:g.v},tot))}">${pctG(g)>=12?fmtPct(pctG(g)):''}</div>`).join('')+'</div>';
+  const gSel = g => grupoCompleto(g.k), gTenue = g => haySel && !g.rows.some(r=>sel.has(r.k));
+  let h = '<div class="cat-split" role="group" aria-label="Reparto entre grupos · clic para filtrar el grupo">'+grupos.map(g=>
+    `<button class="${gSel(g)?'sel':''}${gTenue(g)?' tenue':''}" data-g="${g.k}" aria-pressed="${gSel(g)}" aria-label="Filtrar: ${esc(g.t)}" style="flex:${Math.max(g[metric],tot[metric]*0.01)};background:${g.color}" data-tip="${esc(tipHTML({lab:g.t,n:g.n,v:g.v},tot)+`<div style='margin-top:4px;color:#ffd9c7'>Clic para `+(gSel(g)?'quitar':'filtrar')+' todo el grupo</div>')}">${pctG(g)>=12?fmtPct(pctG(g)):''}</button>`).join('')+'</div>';
   h += '<div class="cat-split-ley">'+grupos.map(g=>`<span><i style="background:${g.color}"></i>${g.t}: <b>${fmtPct(pctG(g))}</b> · ${compactCOP(g.v)} · ${plural(g.n,'contrato','contratos')}</span>`).join('')+'</div>';
   grupos.forEach(g=>{
-    h += `<div class="cat-grupo"><h4><i style="background:${g.color}"></i>${g.t} <span>${fmtN(g.rows.length)} categorías</span></h4><div class="tiles">`;
+    h += `<div class="cat-grupo"><h4><button class="g-btn${gSel(g)?' sel':''}" data-g="${g.k}" aria-pressed="${gSel(g)}"><i style="background:${g.color}"></i>${g.t} <span>${fmtN(g.rows.length)} categorías</span> <span class="g-acc">${gSel(g)?'✕ quitar filtro del grupo':'▸ filtrar todo el grupo'}</span></button></h4><div class="tiles">`;
     g.rows.forEach(r=>{
       const on = sel.has(r.k), pct = tot[metric] ? r[metric]/tot[metric]*100 : 0;
       h += `<button class="tile${on?' sel':''}${haySel&&!on?' tenue':''}" style="--c:${g.color}" data-k="${encodeURIComponent(r.k)}" aria-pressed="${on}" data-tip="${esc(tipHTML({lab:r.k,n:r.n,v:r.v},tot))}">
@@ -905,6 +922,7 @@ function renderCat(F, tot){
   });
   el.innerHTML = h;
   el.querySelectorAll('.tile').forEach(t=>t.addEventListener('click',()=>toggle('cat',decodeURIComponent(t.dataset.k))));
+  el.querySelectorAll('[data-g]').forEach(b=>b.addEventListener('click',()=>toggleGrupo(b.dataset.g)));
 }
 function renderKPIs(F, tot){
   $('k-n').textContent = fmtN(F.length);
@@ -996,7 +1014,10 @@ function renderChips(){
   const chips=[], add=(lab,val,acc)=>chips.push(`<span class="chip"><b>${lab}:</b> <span class="t" title="${esc(val)}">${esc(val)}</span> <button class="x" data-acc="${esc(acc)}" aria-label="Quitar filtro">✕</button></span>`);
   if(state.q) add('Buscar',state.q,'q');
   if(state.per) add('Periodo',state.per==='desde'?'Desde el sismo':'Antes del sismo','per');
+  const enGrupo = new Set();
+  GRUPOS_CAT.forEach(g=>{ if(grupoCompleto(g.k)){ add('Grupo', g.t, 'grp|'+g.k); catsGrupo(g.k).forEach(c=>enGrupo.add(c)); } });
   for(const d in DIMS) state.sel[d].forEach(v=>{
+    if(d==='cat' && enGrupo.has(v)) return;
     const lab = d==='provKey' ? ((RAW.find(c=>c.provKey===v)||{}).provN||v) : v;
     add(DIMS[d].t, lab, 'sel|'+d+'|'+v);
   });
@@ -1007,7 +1028,8 @@ function renderChips(){
   box.innerHTML = chips.length ? '<span class="lbl">Filtros activos:</span>'+chips.join('') : '';
   box.querySelectorAll('.x').forEach(x=>x.addEventListener('click',()=>{
     const a=x.dataset.acc;
-    if(a.startsWith('sel|')){ const [,d,...v]=a.split('|'); state.sel[d].delete(v.join('|')); }
+    if(a.startsWith('grp|')){ catsGrupo(a.slice(4)).forEach(c=>state.sel.cat.delete(c)); }
+    else if(a.startsWith('sel|')){ const [,d,...v]=a.split('|'); state.sel[d].delete(v.join('|')); }
     else if(a==='vmin'||a==='vmax'){ state[a]=null; $('f-'+a.slice(1)).value=''; }
     else if(a==='yrs'){ state.ymin=ANO_MIN; state.ymax=ANO_MAX; }
     else { state[a]=''; if(a==='q') $('f-q').value=''; }

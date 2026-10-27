@@ -656,15 +656,18 @@ Object.keys(DIMS).forEach(d=>state.sel[d]=new Set());
 const valDim = (c,d) => DIMS[d].val ? DIMS[d].val(c) : c[d];
 let metric='v', fmtMode='abs';
 
-function aplica(){
+// excepto: dimensión cuyo filtro se ignora. Cada gráfico se dibuja con todos los filtros
+// menos el suyo, para que al elegir una barra o tarjeta las demás sigan visibles y se
+// puedan sumar más valores (si se aplicara su propio filtro, quedaría solo la elegida).
+function aplica(excepto){
   const q = norm(state.q).trim();
   return RAW.filter(c=>{
     if(state.per==='antes' && c.post) return false;
     if(state.per==='desde' && !c.post) return false;
-    for(const d in DIMS){ if(state.sel[d].size && !state.sel[d].has(valDim(c,d))) return false; }
+    for(const d in DIMS){ if(d!==excepto && state.sel[d].size && !state.sel[d].has(valDim(c,d))) return false; }
     if(state.vmin!=null && c.valor<state.vmin) return false;
     if(state.vmax!=null && c.valor>state.vmax) return false;
-    if(c.ano<state.ymin || c.ano>state.ymax) return false;
+    if(excepto!=='ano' && (c.ano<state.ymin || c.ano>state.ymax)) return false;
     if(q && !norm([c.objeto,c.prov,c.ref,c.refp,c.id,c.doc,c.superv].join(' ')).includes(q)) return false;
     return true;
   });
@@ -843,18 +846,24 @@ function render(){
   const tot = {n:F.length, v:F.reduce((s,c)=>s+c.valor,0)};
   renderKPIs(F, tot); renderChips(); syncControls();
   $('m-resumen').textContent = `Seleccionado: ${plural(F.length,'contrato','contratos')} · ${compactCOP(tot.v)}`;
-  const dimChart = (el, d) => barChart($(el), group(F, c=>valDim(c,d), DIMS[d].label), {tot, sel:state.sel[d], onClick:k=>toggle(d,k)});
-  renderCat(F, tot);
+  // datos de cada gráfico: todos los filtros salvo el de su propia dimensión
+  const sinPropio = d => { if(!(d==='ano' ? (state.ymin!==ANO_MIN||state.ymax!==ANO_MAX) : state.sel[d].size)) return [F, tot];
+    const G = aplica(d); return [G, {n:G.length, v:G.reduce((s,c)=>s+c.valor,0)}]; };
+  const dimChart = (el, d) => { const [G,t] = sinPropio(d); barChart($(el), group(G, c=>valDim(c,d), DIMS[d].label), {tot:t, sel:state.sel[d], onClick:k=>toggle(d,k)}); };
+  renderCat(...sinPropio('cat'));
   // Top 15: siempre los 15 de mayor valor adjudicado; la métrica elegida solo cambia la lectura
-  const provs = group(F, c=>c.provKey, c=>c.provN).sort((a,b)=>b.v-a.v).slice(0,15);
-  barChart($('chart-prov'), provs, {tot, sel:state.sel.provKey, ordenar:false, onClick:k=>toggle('provKey',k)});
+  const [Gp, tp] = sinPropio('provKey');
+  const provs = group(Gp, c=>c.provKey, c=>c.provN).sort((a,b)=>b.v-a.v).slice(0,15);
+  barChart($('chart-prov'), provs, {tot:tp, sel:state.sel.provKey, ordenar:false, onClick:k=>toggle('provKey',k)});
   dimChart('chart-est','estado');
   const hoy=new Date().toISOString().slice(0,10), abiertos=F.filter(c=>!/Cerrado|Terminado/.test(c.estado)), vencidos=abiertos.filter(c=>c.fin&&c.fin<hoy);
   $('est-nota').textContent = vencidos.length ? `Ojo: ${plural(vencidos.length,'contrato','contratos')} de ${fmtN(abiertos.length)} sin cerrar en SECOP ya pasaron su fecha de fin. El estado es el que reporta la entidad y puede estar desactualizado.` : '';
   dimChart('chart-tipo','tipo');
   dimChart('chart-mod','modalidad');
-  const anos = group(F,c=>c.ano).sort((a,b)=>a.k-b.k);
-  barChart($('chart-ano'), anos, {tot, ordenar:false, sel:new Set(state.ymin===state.ymax?[String(state.ymin)]:[]),
+  const [Ga, ta] = sinPropio('ano');
+  const anos = group(Ga,c=>c.ano).sort((a,b)=>a.k-b.k);
+  const rangoAnos = (state.ymin!==ANO_MIN||state.ymax!==ANO_MAX) ? anos.map(r=>r.k).filter(y=>+y>=state.ymin&&+y<=state.ymax) : [];
+  barChart($('chart-ano'), anos, {tot:ta, ordenar:false, sel:new Set(rangoAnos),
     onClick:k=>{ const y=+k, solo=state.ymin===y&&state.ymax===y; state.ymin=solo?ANO_MIN:y; state.ymax=solo?ANO_MAX:y; page=1; render(); }});
   renderFuente(F); renderMeth(); renderTable(F);
 }
